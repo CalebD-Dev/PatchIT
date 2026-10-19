@@ -45,7 +45,8 @@ class TicketCreate(BaseModel):
     category: str = Field(min_length=1, max_length=60)
     priority: Priority = "Medium"
     requester_id: int
-    assignee_id: int | None = None
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class TicketUpdate(BaseModel):
@@ -82,6 +83,7 @@ class TicketRead(BaseModel):
     category: str
     priority: Priority
     status: Status
+    escalated: bool
     requester: UserRead
     assignee: UserRead | None
     created_at: datetime

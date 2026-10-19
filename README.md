@@ -15,7 +15,7 @@ PatchIT is a support-desk application for tracking IT requests, technician assig
 
 Requirements: Python 3.11+, Node.js 20+, npm, and PostgreSQL 17+ (installed locally or started with Docker Desktop).
 
-1. Install PostgreSQL locally on Windows, if needed:
+1. Choose one PostgreSQL option. To install PostgreSQL locally on Windows:
 
    ```powershell
    winget install --id PostgreSQL.PostgreSQL.17 --exact
@@ -23,13 +23,19 @@ Requirements: Python 3.11+, Node.js 20+, npm, and PostgreSQL 17+ (installed loca
 
    Keep the default port `5432` and set an administrator password in the installer. Stack Builder is optional.
 
-   Alternatively, start the included Docker database:
+   Or, if you have Docker Desktop, start the included development database:
 
    ```powershell
    docker compose up -d db
    ```
 
-2. Copy `.env.example` to `.env` in the repository root. Create a dedicated application user and database with the PostgreSQL command-line client:
+2. Configure the database connection in a `.env` file in the repository root:
+
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+
+   If you installed PostgreSQL locally, create an application user and database. Open the PostgreSQL prompt:
 
    ```powershell
    & 'C:\Program Files\PostgreSQL\17\bin\psql.exe' -h localhost -U postgres -d postgres
@@ -44,7 +50,26 @@ Requirements: Python 3.11+, Node.js 20+, npm, and PostgreSQL 17+ (installed loca
    \q
    ```
 
-   `\password` prompts for the new application password without displaying it. Set `DATABASE_URL` in `.env` to `postgresql+psycopg://patchit:<url-encoded-password>@localhost:5432/patchit`. The `.env` file is ignored by Git; do not commit it. When using Docker's included database, its demo credentials are `patchit`/`patchit` and are intended only for local development.
+   The `\password` command prompts for the new application password without displaying it. Set the connection string in `.env` using this PowerShell snippet; it prompts securely and URL-encodes special characters for you:
+
+   ```powershell
+   $securePassword = Read-Host "PostgreSQL patchit password" -AsSecureString
+   $pointer = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
+   try {
+       $password = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
+       $encoded = [System.Uri]::EscapeDataString($password)
+       $envFile = Get-Content .env -Raw
+       $envFile = $envFile.Replace("REPLACE_WITH_URL_ENCODED_PASSWORD", $encoded)
+       [System.IO.File]::WriteAllText((Resolve-Path .env), $envFile, [System.Text.UTF8Encoding]::new($false))
+   } finally {
+       [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
+       $securePassword.Dispose()
+       $password = $null
+       $encoded = $null
+   }
+   ```
+
+   With Docker's included database, skip the role/database creation and password steps; its `patchit`/`patchit` credentials are already configured for local development. Keep `.env` private: it is ignored by Git and should not be committed.
 
 3. Install and start the API from the `backend` directory:
 
@@ -69,7 +94,28 @@ Requirements: Python 3.11+, Node.js 20+, npm, and PostgreSQL 17+ (installed loca
 
    Open the URL printed by Vite, typically `http://localhost:5173`.
 
-The demo interface operates as the seeded administrator. Authentication and server-enforced role permissions are not yet enabled; do not expose this demo API publicly.
+## View the database in pgAdmin
+
+The Windows PostgreSQL installer includes pgAdmin 4. Open it from the Start menu. If prompted to register a server, use these settings:
+
+- **Name:** PatchIT local
+- **Host:** `localhost`
+- **Port:** `5432`
+- **Maintenance database:** `patchit`
+- **Username:** `patchit`
+- **Password:** the application password used in `.env` (for Docker, `patchit`)
+
+After connecting, expand **Servers → PatchIT local → Databases → patchit → Schemas → public → Tables**. To inspect ticket records, right-click **tickets** and select **View/Edit Data → All Rows**. To run a SQL query, right-click the `patchit` database, choose **Query Tool**, and run:
+
+```sql
+SELECT id, title, status, priority, category, created_at
+FROM tickets
+ORDER BY created_at DESC;
+```
+
+Run `alembic upgrade head` to create the tables. The demo users, tickets, and articles are inserted when the API starts for the first time.
+
+The demo interface starts as the seeded administrator. Switching the profile changes the demo identity: requesters see only their own tickets; technicians see their assigned tickets and the unassigned or escalated team queue; administrators can see all tickets. New tickets are always unassigned and enter the technician queue. Technicians must claim an available ticket before editing it or adding internal notes. Only the assigned technician can escalate an active ticket back to the shared queue, where another technician can claim it. Ticket assignment and escalation are recorded in the activity history. Apply database changes with `alembic upgrade head` after updating the app. This is a demo-only identity header, not authentication; users can spoof it. Do not expose the API publicly until real authentication and server-verified roles are implemented.
 
 ## Tests and production build
 

@@ -30,6 +30,7 @@ export type Ticket = {
   category: string;
   priority: "Low" | "Medium" | "High" | "Urgent";
   status: "Open" | "In Progress" | "Waiting" | "Resolved" | "Closed";
+  escalated: boolean;
   requester: User;
   assignee: User | null;
   created_at: string;
@@ -58,9 +59,14 @@ export type Metrics = {
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const demoUserId = window.localStorage.getItem("patchit-demo-user") ?? "1";
   const response = await fetch(path, {
     ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers: {
+      "Content-Type": "application/json",
+      "X-Demo-User-ID": demoUserId,
+      ...init?.headers,
+    },
   });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
@@ -87,7 +93,6 @@ export const api = {
     category: string;
     priority: Ticket["priority"];
     requester_id: number;
-    assignee_id: number | null;
   }) =>
     request<Ticket>("/api/tickets", {
       method: "POST",
@@ -102,6 +107,10 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(updates),
     }),
+  claimTicket: (ticketId: number) =>
+    request<Ticket>(`/api/tickets/${ticketId}/claim`, { method: "POST" }),
+  escalateTicket: (ticketId: number) =>
+    request<Ticket>(`/api/tickets/${ticketId}/escalate`, { method: "POST" }),
   addComment: (ticketId: number, authorId: number, body: string) =>
     request<Comment>(`/api/tickets/${ticketId}/comments`, {
       method: "POST",
