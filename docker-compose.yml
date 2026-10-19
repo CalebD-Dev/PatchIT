@@ -1,0 +1,19 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: patchit
+      POSTGRES_USER: patchit
+      POSTGRES_PASSWORD: patchit
+    ports:
+      - "5432:5432"
+    volumes:
+      - patchit-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U patchit -d patchit"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  patchit-db:
